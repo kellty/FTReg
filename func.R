@@ -49,7 +49,7 @@ tsrreg_RGN <- function(yc, Ztsr, r, rhoAmat=0, THETAtsr=as.tensor(0),
   THETAnew <- hosvd_result$est  # initialization
   Stsr <- hosvd_result$Z        # core tensor
   Umat_list <- hosvd_result$U   # loading matrices
-  errmat <- NULL
+  errmat <- NULL # c(0, NA, NA, ifelse(THETAfnorm,fnorm(THETAnew-THETAtsr)/THETAfnorm,NA))
   t0 <- proc.time()
   for (iter in 1:iter_max){
     Umatperp_list <- Umattran_list <- Vmat_list <- Wmat_list <- hatDlist <- list()
@@ -178,7 +178,7 @@ ftreg <- function(y, Xtsr, breaks, r, M=0, rho=1e-6, halforder=2,
 # regcoef_mat: true parameter pT*(p1*...*pD) matrix w.r.t. spline basis;
 # iter_max: the maximum number of iterations;
 # tol: tolerence for successful recovery /stoping criteria;
-# Output estimated vectorized regression parameter, residuals, hat matrix, and running time
+# Output estimated vectorized regression parameter, residuals, hat matrix, running time and estimation error
   t0 <- proc.time()
   p <- Xtsr@modes[-1]
   breaks.mid <- (c(0,breaks)+c(breaks,1))/2
@@ -213,7 +213,8 @@ ftreg <- function(y, Xtsr, breaks, r, M=0, rho=1e-6, halforder=2,
   regcoef_mat_est <- solve(t(ns.results$ns_at_knots)%*%ns.results$ns_at_knots,
                         t(ns.results$ns_at_knots)%*%k_unfold(THETAtsr_ini, 1)@data)
   return(list(res=tsrreg.results$res, hatMat=tsrreg.results$hatMat, regcoef_scal=gam_old,
-              nsbasis=ns.results$nsbasis, regcoef_mat=regcoef_mat_est, time=(proc.time()-t0)[3]))
+              nsbasis=ns.results$nsbasis, regcoef_mat=regcoef_mat_est, time=(proc.time()-t0)[3],
+              error_matrix=tsrreg.results$error_matrix))
 }
 
 ftreg.gcv <- function(y, Xtsr, breaks, r, M=0, rho_list=10^(-8:-3), halforder=2,
@@ -231,9 +232,6 @@ ftreg.gcv <- function(y, Xtsr, breaks, r, M=0, rho_list=10^(-8:-3), halforder=2,
 # tol: tolerence for successful recovery /stoping criteria;
 # Output GCV, AIC, BIC, RSS/n, and ISE if regcoef_mat and nsbasis are provided
   p <- Xtsr@modes[-1]
-  breaks.mid <- (c(0,breaks)+c(breaks,1))/2
-  D <- diag(breaks.mid[-1]-breaks.mid[-(p[1]+1)])
-  Zmat <- k_unfold(ttm(Xtsr, D, 2), 1)@data
   n <- Xtsr@modes[1]
   trH <- RSS <- ISE <- NULL
   grid_point <- (0.5:(1e3-0.5))/1e3
@@ -253,67 +251,64 @@ ftreg.gcv <- function(y, Xtsr, breaks, r, M=0, rho_list=10^(-8:-3), halforder=2,
   }
   GCV <- (RSS/n)/(1-trH/n)^2
   dof <- sum(r*(p-r)) + prod(r)
-  AIC <- RSS + 2*dof
-  BIC <- RSS + log(n)*dof
+  AIC <- n*log(RSS/n) + 2*dof
+  BIC <- n*log(RSS/n) + log(n)*dof
   return(list(GCV=GCV, AIC=AIC, BIC=BIC, RSSoverN=RSS/n, ISE=ISE))
 }
 
-# ftreg.cv <- function(y, Xtsr, breaks, r, M=0, rho_list=10^(-8:-3), halforder=2,
-#                      cv_fold=10, iter_max=60, tol=1e-6){
-#   # y: response n-vector;
-#   # Xtsr: covariate n*pT*p1*...*pD tensor;
-#   # breaks: normalized time pT-vector with range (0,1);
-#   # r: Tucker rank;
-#   # M: covariate n*p0 matrix;
-#   # rho_list: tuning parameter of roughness penalty;
-#   # halforder: order of derivative to be regularized;
-#   # cv_fold: number of folds for cross-validation;
-#   # iter_max: the maximum number of iterations;
-#   # tol: tolerence for successful recovery /stoping criteria;
-#   # Output CV and RSS
-#   p <- Xtsr@modes[-1]
-#   breaks.mid <- (c(0,breaks)+c(breaks,1))/2
-#   D <- diag(breaks.mid[-1]-breaks.mid[-(p[1]+1)])
-#   Zmat <- k_unfold(ttm(Xtsr, D, 2), 1)@data
-#   n <- Xtsr@modes[1]
-#   idx <- sample(1:n)
-#   cv_list <- RSS <- NULL
-#   for (rho in rho_list) {
-#     print("  Set tuning parameter ...")
-#     ftreg_tmp <- ftreg(y, Xtsr, breaks, r, M, rho, halforder, iter_max=1.5*iter_max, tol=tol/10)
-#     RSS <- c(RSS, sum(ftreg_tmp$res^2))
-#     n_sub <- n %/% cv_fold
-#     cv <- tmp <- 0
-#     for (k in 1:cv_fold) {
-#       print(paste0('cv fold ',k,'/',cv_fold,' start'))
-#       idx_k <- idx[(tmp+1):(tmp+n_sub)]
-#       idx_minusk <- idx[-((tmp+1):(tmp+n_sub))]
-#       Xtsr_minusk <- k_fold(k_unfold(Xtsr, 1)[idx_minusk,], 1, c(n - n_sub, p))
-#       if (sum(M^2)) {
-#         M_minusk <- M[idx_minusk,]
-#         Mgam_k <- M[idx_k,] %*% solve(t(M_minusk)%*%M_minusk, t(M_minusk)%*%y[idx_minusk])
-#       } else {
-#         M_minusk <- Mgam_k <- 0
-#       }
-#       ftreg.results_k <- ftreg(y[idx_minusk], Xtsr_minusk, breaks, r, M_minusk,
-#                                rho, halforder, iter_max=iter_max, tol=tol)
-#       THETAtsr.est_vec <- c(ftreg.results_k$nsbasis(breaks)%*%ftreg.results_k$regcoef_mat)
-#       cv <- cv + mean(( y[idx_k] - Mgam_k - Zmat[idx_k,] %*% THETAtsr.est_vec )^2)
-#       print(paste0('cv fold ',k,'/',cv_fold,' end'))
-#       tmp <- tmp + n_sub
-#       if (k == cv_fold - n%%cv_fold) {
-#         n_sub <- n_sub + 1
-#       }
-#     }
-#     cv_list <- c(cv_list, cv/cv_fold)
-#   }
-#   o <- order(cv_list)
-#   print(paste0("ρ=", rho_list[o], ", Cross-Validation=", round(cv_list[o], 14)))
-#   o <- order(RSS)
-#   print(paste0("ρ=", rho_list[o], ", RSS/n=", round(RSS[o]/n, 14)))
-#   plot(rho_list, cv_list, log='x', xlab=expression(rho), ylab='', type='b')
-#   lines(rho_list, RSS/n, type='b', lty=2, pch=2)
-#   legend("topleft", c("CV","RSS/n"), lty=1:2, pch=1:2)
-#   return(list(cv=cv_list, RSSoverN=RSS/n))
-# }
+ftreg.cv <- function(y, Xtsr, breaks, r, M=0, rho_list=10^(-8:-3), halforder=2,
+                     cv_fold=10, iter_max=60, tol=1e-6){
+# y: response n-vector;
+# Xtsr: covariate n*pT*p1*...*pD tensor;
+# breaks: normalized time pT-vector with range (0,1);
+# r: Tucker rank;
+# M: covariate n*p0 matrix;
+# rho_list: tuning parameter of roughness penalty;
+# halforder: order of derivative to be regularized;
+# cv_fold: number of folds for cross-validation;
+# iter_max: the maximum number of iterations;
+# tol: tolerence for successful recovery /stoping criteria;
+# Output CV and RSS/n
+  p <- Xtsr@modes[-1]
+  breaks.mid <- (c(0,breaks)+c(breaks,1))/2
+  D <- diag(breaks.mid[-1]-breaks.mid[-(p[1]+1)])
+  Zmat <- k_unfold(ttm(Xtsr, D, 2), 1)@data
+  n <- Xtsr@modes[1]
+  idx <- sample(1:n)
+  cv_list <- RSS <- NULL
+  for (rho in rho_list) {
+    print("  Set tuning parameter ...")
+    ftreg_tmp <- ftreg(y, Xtsr, breaks, r, M, rho, halforder, iter_max=1.5*iter_max, tol=tol/10)
+    RSS <- c(RSS, sum(ftreg_tmp$res^2))
+    n_sub <- n %/% cv_fold
+    cv <- tmp <- 0
+    for (k in 1:cv_fold) {
+      print(paste0('cv fold ',k,'/',cv_fold,' start'))
+      idx_k <- idx[(tmp+1):(tmp+n_sub)]
+      idx_minusk <- idx[-((tmp+1):(tmp+n_sub))]
+      Xtsr_minusk <- k_fold(k_unfold(Xtsr, 1)[idx_minusk,], 1, c(n - n_sub, p))
+      if (sum(M^2)) {
+        M_minusk <- M[idx_minusk,]
+        Mgam_k <- M[idx_k,] %*% solve(t(M_minusk)%*%M_minusk, t(M_minusk)%*%y[idx_minusk])
+      } else {
+        M_minusk <- Mgam_k <- 0
+      }
+      ftreg.results_k <- ftreg(y[idx_minusk], Xtsr_minusk, breaks, r, M_minusk,
+                               rho, halforder, iter_max=iter_max, tol=tol)
+      THETAtsr.est_vec <- c(ftreg.results_k$nsbasis(breaks)%*%ftreg.results_k$regcoef_mat)
+      cv <- cv + mean(( y[idx_k] - Mgam_k - Zmat[idx_k,] %*% THETAtsr.est_vec )^2)
+      print(paste0('cv fold ',k,'/',cv_fold,' end'))
+      tmp <- tmp + n_sub
+      if (k == cv_fold - n%%cv_fold) {
+        n_sub <- n_sub + 1
+      }
+    }
+    cv_list <- c(cv_list, cv/cv_fold)
+  }
+  o <- order(cv_list)
+  print(paste0("ρ=", rho_list[o], ", Cross-Validation=", round(cv_list[o], 14)))
+  o <- order(RSS)
+  print(paste0("ρ=", rho_list[o], ", RSS/n=", round(RSS[o]/n, 14)))
+  return(list(cv=cv_list, RSSoverN=RSS/n))
+}
 

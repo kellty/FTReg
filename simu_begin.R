@@ -1,7 +1,14 @@
 source('func.R')
 set.seed(1234)
-p <- c(12,8,8) # c(pT,p1,...,pD) with D>1
 K <- 30 # num of basis func
+Xbasis <- function(u){
+  basis_mat <- matrix(NA, nrow=length(u), ncol=K)
+  for (k in 1:K) {
+    basis_mat[,k] <- sin(k*pi*u)/k
+  }
+  return(basis_mat)
+}
+p <- c(12,8,8) # c(pT,p1,...,pD) with D>1
 # r <- ceiling(p/10); r[r==1] <- 2 # prod(r)>=max(r)^2
 r <- c(2,3,3) # true Tucker rank
 rho_list <- 10^seq(-8.6,-4,1) # tuning parameter
@@ -24,11 +31,4 @@ ground <- 0
 for (idx in 1:ngrid) {
   regcoef_at_grid <- c(regcoef_vec$nsbasis(grid_point[idx]) %*% regcoef_vec$regcoef_mat)
   ground <- ground + sum(regcoef_at_grid^2)/ngrid
-}
-Xbasis <- function(u){
-  basis_mat <- matrix(NA, nrow=length(u), ncol=K)
-  for (k in 1:K) {
-    basis_mat[,k] <- sin(k*pi*u)/k
-  }
-  return(basis_mat)
 }

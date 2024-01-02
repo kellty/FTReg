@@ -2,15 +2,19 @@ source('func.R')
 load("ADHD_prep.RData")
 pT <- Xtsr_ADHD@modes[2]
 rho_list_ADHD <- 10^seq(0.5,3.5,0.2)
-GCV_ADHD <- rho_ADHD <- NULL
+GCV_ADHD <- AIC_ADHD <- BIC_ADHD <- rho_ADHD <- NULL
 for (rT in 2:6) {
 r_ADHD <- c(rT,2,2,2)
 cv_ADHD <- ftreg.gcv(y_ADHD, Xtsr_ADHD, breaks_ADHD, r_ADHD, M_ADHD, rho_list_ADHD, halforder=2, iter_max=160)
-GCV_ADHD <- c(GCV_ADHD, min(cv_ADHD$GCV))
-rho_ADHD <- c(rho_ADHD, rho_list_ADHD[which.min(cv_ADHD$GCV)])
+idx <- which.min(cv_ADHD$GCV)
+GCV_ADHD <- c(GCV_ADHD, cv_ADHD$GCV[idx])
+AIC_ADHD <- c(AIC_ADHD, cv_ADHD$AIC[idx])
+BIC_ADHD <- c(BIC_ADHD, cv_ADHD$BIC[idx])
+rho_ADHD <- c(rho_ADHD, rho_list_ADHD[idx])
 }
 r_ADHD <- c((2:6)[which.min(GCV_ADHD)],2,2,2)
 rho_cv_ADHD <- rho_ADHD[which.min(GCV_ADHD)]
+cv10_ADHD <- ftreg.cv(y_ADHD, Xtsr_ADHD, breaks_ADHD, r_ADHD, M_ADHD, c(rho_cv_ADHD,1e-2), halforder=2, cv_fold=10, iter_max=160)
 ftreg.results_ADHD <- ftreg(y_ADHD, Xtsr_ADHD, breaks_ADHD, r_ADHD, M_ADHD, rho_cv_ADHD, halforder=2, iter_max=160)
 Theta <- ftreg.results_ADHD$nsbasis(breaks_ADHD) %*% ftreg.results_ADHD$regcoef_mat
 regcoef_tsr_sample <- k_fold(Theta, 1, c(pT,8,8,4))
@@ -74,3 +78,21 @@ dev.off()
 #   overlay(nim[,,z,], tmp)
 #   dev.off()
 # }
+
+setEPS()
+postscript("ADHD_t.eps")
+# png("ADHD_t.png")
+x <- 37;  y <- 36;  z <- 21
+coef_ADHD <- solve(t(ftreg.results_ADHD$nsbasis(breaks_ADHD))%*%ftreg.results_ADHD$nsbasis(breaks_ADHD),
+                   t(ftreg.results_ADHD$nsbasis(breaks_ADHD))%*%regcoef_tsr_sample@data[x,y,z,])
+plot((100:900)/1000, ftreg.results_ADHD$nsbasis((100:900)/1000)%*%coef_ADHD, xlab='Time', ylab="Effect on ADHD", type='l', lwd=2)
+x <- 37;  y <- 36;  z <- 14
+coef_ADHD <- solve(t(ftreg.results_ADHD$nsbasis(breaks_ADHD))%*%ftreg.results_ADHD$nsbasis(breaks_ADHD),
+                   t(ftreg.results_ADHD$nsbasis(breaks_ADHD))%*%regcoef_tsr_sample@data[x,y,z,])
+lines((100:900)/1000, ftreg.results_ADHD$nsbasis((100:900)/1000)%*%coef_ADHD, lwd=2, lty=2)
+x <- 37;  y <- 50;  z <- 14
+coef_ADHD <- solve(t(ftreg.results_ADHD$nsbasis(breaks_ADHD))%*%ftreg.results_ADHD$nsbasis(breaks_ADHD),
+                   t(ftreg.results_ADHD$nsbasis(breaks_ADHD))%*%regcoef_tsr_sample@data[x,y,z,])
+lines((100:900)/1000, ftreg.results_ADHD$nsbasis((100:900)/1000)%*%coef_ADHD, lwd=2, lty=3)
+legend('topright', c("cortical surfaces", "white matter", "cerebellum"), lwd=2, lty=1:3)
+dev.off()
