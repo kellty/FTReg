@@ -93,6 +93,6 @@ lines((100:900)/1000, ftreg.results_ADHD$nsbasis((100:900)/1000)%*%coef_ADHD, lw
 x <- 37;  y <- 50;  z <- 14
 coef_ADHD <- solve(t(ftreg.results_ADHD$nsbasis(breaks_ADHD))%*%ftreg.results_ADHD$nsbasis(breaks_ADHD),
                    t(ftreg.results_ADHD$nsbasis(breaks_ADHD))%*%regcoef_tsr_sample@data[x,y,z,])
-lines((100:900)/1000, ftreg.results_ADHD$nsbasis((100:900)/1000)%*%coef_ADHD, lwd=2, lty=3)
-legend('topright', c("cortical surfaces", "white matter", "cerebellum"), lwd=2, lty=1:3)
+lines((100:900)/1000, ftreg.results_ADHD$nsbasis((100:900)/1000)%*%coef_ADHD, lwd=2, lty=4)
+legend('topright', c("cortical surfaces", "white matter", "cerebellum"), lwd=2, lty=c(1,2,4))
 dev.off()
