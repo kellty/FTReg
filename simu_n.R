@@ -48,6 +48,6 @@ plot(n_list[-(1:2)], result_n[-(1:2),1], log='x', xlab=expression(n), ylab='RISE
 segments(n_list[-(1:2)], result_n[-(1:2),1]-result_n[-(1:2),2], n_list[-(1:2)], result_n[-(1:2),1]+result_n[-(1:2),2], lty=1)
 arrows(n_list[-(1:2)], result_n[-(1:2),1]-result_n[-(1:2),2], n_list[-(1:2)], result_n[-(1:2),1]+result_n[-(1:2),2], code=3, angle=90, length=0.1)
 # fit_n <- lm(log(result_n[,1])~log(n_list))
-lines(1:2000, 0.96*result_n[length(n_list),1]*(max(n_list)/1:2000)^0.5, lty=3)
+lines(1:2000, 0.96*result_n[length(n_list),1]*(max(n_list)/1:2000)^0.5, lty=3, lwd=2)
 legend('topright', expression(RISE %prop% n^{-1/2}), lty=3, lwd=1)
 dev.off()
