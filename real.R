@@ -16,6 +16,7 @@ r_ADHD <- c((2:6)[which.min(GCV_ADHD)],2,2,2)
 rho_cv_ADHD <- rho_ADHD[which.min(GCV_ADHD)]
 cv10_ADHD <- ftreg.cv(y_ADHD, Xtsr_ADHD, breaks_ADHD, r_ADHD, M_ADHD, c(rho_cv_ADHD,1e-2), halforder=2, cv_fold=10, iter_max=160)
 ftreg.results_ADHD <- ftreg(y_ADHD, Xtsr_ADHD, breaks_ADHD, r_ADHD, M_ADHD, rho_cv_ADHD, halforder=2, iter_max=160)
+R2 <- 1 - sum(ftreg.results_ADHD$res^2) / sum((y_ADHD-mean(y_ADHD))^2)
 Theta <- ftreg.results_ADHD$nsbasis(breaks_ADHD) %*% ftreg.results_ADHD$regcoef_mat
 regcoef_tsr_sample <- k_fold(Theta, 1, c(pT,8,8,4))
 rep_mat <- function(ntot, nsub){
